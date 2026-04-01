@@ -12,11 +12,16 @@
     "@types/d3": "^7.4.3",
     "d3": "^7.9.0",
     "next": "^14.2.35",
+    "next-auth": "^4.24.13",
+    "nodemailer": "^7.0.13",
+    "pg": "^8.20.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
   "devDependencies": {
     "@types/node": "^20.19.37",
+    "@types/nodemailer": "^7.0.11",
+    "@types/pg": "^8.20.0",
     "@types/react": "^18.3.28",
     "@types/react-dom": "^18.3.0",
     "autoprefixer": "^10.4.27",
