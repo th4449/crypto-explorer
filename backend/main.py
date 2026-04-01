@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import get_pool, close_pool
-from app.routers import companies, people, wallets, banks, violations
+from app.routers import companies, people, wallets, banks, violations, graph
 
 load_dotenv()
 
@@ -42,6 +42,7 @@ app.include_router(people.router)
 app.include_router(wallets.router)
 app.include_router(banks.router)
 app.include_router(violations.router)
+app.include_router(graph.router)
 
 
 @app.get("/health")

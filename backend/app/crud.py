@@ -13,6 +13,7 @@ from uuid import UUID
 import asyncpg
 
 from app.database import get_pool
+from app.services.graph import upsert_vertex, remove_vertex, ENTITY_TABLES
 
 
 async def create_entity(table: str, columns: list[str], data: dict) -> dict:
@@ -44,7 +45,21 @@ async def create_entity(table: str, columns: list[str], data: dict) -> dict:
 
     async with pool.acquire() as conn:
         row = await conn.fetchrow(query, *values)
-    return dict(row)
+
+        # Sync the new entity into the graph as a vertex
+        result = dict(row)
+        meta = ENTITY_TABLES.get(table)
+        if meta:
+            name = result.get(meta["name_col"]) or f"(unnamed {meta['type']})"
+            await upsert_vertex(
+                conn,
+                entity_id=str(result["id"]),
+                name=name,
+                entity_type=meta["type"],
+                verification_tier=result["verification_tier"],
+            )
+
+    return result
 
 
 async def get_entity(table: str, entity_id: UUID) -> dict | None:
@@ -150,11 +165,29 @@ async def update_entity(table: str, columns: list[str], entity_id: UUID, data: d
 
     async with pool.acquire() as conn:
         row = await conn.fetchrow(query, *values)
-    return dict(row) if row else None
+
+    if not row:
+        return None
+
+    # Sync updated properties to the graph vertex
+    result = dict(row)
+    meta = ENTITY_TABLES.get(table)
+    if meta:
+        async with pool.acquire() as conn:
+            name = result.get(meta["name_col"]) or f"(unnamed {meta['type']})"
+            await upsert_vertex(
+                conn,
+                entity_id=str(result["id"]),
+                name=name,
+                entity_type=meta["type"],
+                verification_tier=result["verification_tier"],
+            )
+
+    return result
 
 
 async def soft_delete_entity(table: str, entity_id: UUID) -> bool:
-    """Set deleted_at timestamp. Returns True if a row was affected."""
+    """Set deleted_at timestamp and remove the vertex from the graph."""
     pool = await get_pool()
     query = f"""
         UPDATE {table}
@@ -164,4 +197,6 @@ async def soft_delete_entity(table: str, entity_id: UUID) -> bool:
     """
     async with pool.acquire() as conn:
         row = await conn.fetchrow(query, entity_id)
+        if row:
+            await remove_vertex(conn, str(entity_id))
     return row is not None
