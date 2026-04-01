@@ -1,0 +1,23 @@
+version: "3.8"
+
+services:
+  db:
+    image: apache/age:PG16_latest
+    container_name: crypto_explorer_db
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: crypto_explorer
+      POSTGRES_USER: app_user
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-localdevpassword}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app_user -d crypto_explorer"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata:
