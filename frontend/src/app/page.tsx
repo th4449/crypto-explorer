@@ -210,12 +210,20 @@ export default function Home() {
                 Mapping Russia's cryptocurrency sanctions-evasion ecosystem
               </p>
             </div>
-            <Link
-              href="/admin"
-              className="text-sm text-gray-500 hover:text-gray-700 border border-gray-300 px-3 py-1.5 rounded"
-            >
-              Admin
-            </Link>
+            <div className="flex gap-2">
+              <Link
+                href="/otc-ratings"
+                className="text-sm text-gray-500 hover:text-gray-700 border border-gray-300 px-3 py-1.5 rounded"
+              >
+                OTC Ratings
+              </Link>
+              <Link
+                href="/admin"
+                className="text-sm text-gray-500 hover:text-gray-700 border border-gray-300 px-3 py-1.5 rounded"
+              >
+                Admin
+              </Link>
+            </div>
           </div>
 
           {/* Search input */}

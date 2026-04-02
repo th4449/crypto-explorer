@@ -80,6 +80,17 @@ export default function AdminLayout({
             <span>📋</span>
             Audit Log
           </Link>
+          <Link
+            href="/admin/moderation"
+            className={`flex items-center gap-2 px-3 py-2 rounded text-sm ${
+              pathname === "/admin/moderation"
+                ? "bg-blue-50 text-blue-700 font-medium"
+                : "text-gray-700 hover:bg-gray-50"
+            }`}
+          >
+            <span>🛡️</span>
+            Moderation
+          </Link>
         </nav>
 
         <div className="p-4 border-t border-gray-200 space-y-3">
