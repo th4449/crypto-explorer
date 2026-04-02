@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import get_pool, close_pool
 from app.auth import AuthMiddleware
-from app.routers import companies, people, wallets, banks, violations, graph, relationships, imports, audit
+from app.routers import companies, people, wallets, banks, violations, graph, relationships, imports, audit, otc
 
 load_dotenv()
 
@@ -47,6 +47,7 @@ app.include_router(graph.router)
 app.include_router(relationships.router)
 app.include_router(imports.router)
 app.include_router(audit.router)
+app.include_router(otc.router)
 
 # Auth middleware — validates session tokens on POST/PUT/DELETE requests.
 # Added after routers so route matching works, but middleware runs before handlers.
