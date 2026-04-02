@@ -171,6 +171,7 @@ export default function EntityDetailPage() {
   const [relationships, setRelationships] = useState<RelationshipsResponse | null>(null);
   const [enrichment, setEnrichment] = useState<Record<string, any> | null>(null);
   const [enrichmentLoading, setEnrichmentLoading] = useState(false);
+  const [sanctions, setSanctions] = useState<Record<string, any> | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
 
@@ -221,6 +222,15 @@ export default function EntityDetailPage() {
       .then(setEnrichment)
       .catch(() => setEnrichment(null))
       .finally(() => setEnrichmentLoading(false));
+  }, [slug, entityId, entity]);
+
+  /* Fetch sanctions status for all entity types */
+  useEffect(() => {
+    if (!entity || !slug) return;
+
+    apiFetch<Record<string, any>>(`/api/v1/sanctions/check/${slug}/${entityId}`)
+      .then(setSanctions)
+      .catch(() => setSanctions(null));
   }, [slug, entityId, entity]);
 
   /* Loading / error states */
@@ -292,6 +302,37 @@ export default function EntityDetailPage() {
                   {TYPE_LABEL[slug] || slug}
                 </span>
                 <TierBadge tier={entity.verification_tier} />
+                {/* Sanctions badge */}
+                {sanctions && sanctions.match_score !== undefined && (
+                  sanctions.match_score >= 0.8 ? (
+                    <a
+                      href={`https://www.opensanctions.org/entities/${sanctions.opensanctions_id}/`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800 hover:bg-red-200"
+                      title={`Match score: ${sanctions.match_score} — ${sanctions.match_data?.caption || ""}`}
+                    >
+                      🚨 Sanctions Match
+                    </a>
+                  ) : sanctions.match_score >= 0.5 ? (
+                    <a
+                      href={`https://www.opensanctions.org/entities/${sanctions.opensanctions_id}/`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800 hover:bg-yellow-200"
+                      title={`Match score: ${sanctions.match_score} — ${sanctions.match_data?.caption || ""}`}
+                    >
+                      ⚠️ Possible Match
+                    </a>
+                  ) : (
+                    <span
+                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800"
+                      title={sanctions.checked_at ? `Checked ${new Date(sanctions.checked_at).toLocaleDateString()}` : "No sanctions match found"}
+                    >
+                      ✓ No Match
+                    </span>
+                  )
+                )}
               </div>
               <h1 className="text-xl font-semibold text-gray-900">
                 {displayName}
@@ -303,6 +344,80 @@ export default function EntityDetailPage() {
             >
               View in Graph
             </Link>
+          </div>
+
+          {/* Sanctions match detail */}
+          {sanctions && sanctions.match_score >= 0.5 && sanctions.match_data && (
+            <div className="mt-3 pt-3 border-t border-gray-100 text-xs text-gray-600">
+              <span className="font-medium">OpenSanctions match</span>
+              {": "}
+              {sanctions.match_data.caption || sanctions.opensanctions_id}
+              {sanctions.match_data.datasets && sanctions.match_data.datasets.length > 0 && (
+                <span className="text-gray-400 ml-1">
+                  (datasets: {sanctions.match_data.datasets.join(", ")})
+                </span>
+              )}
+              <span className="text-gray-400 ml-2">
+                Score: {(sanctions.match_score * 100).toFixed(0)}%
+              </span>
+            </div>
+          )}
+        </div>
+
+        {/* Investigate — OSINT lookup buttons */}
+        <div className="bg-white border border-gray-200 rounded p-5">
+          <h2 className="text-sm font-medium text-gray-700 mb-3">
+            Investigate Further
+          </h2>
+          <div className="flex flex-wrap gap-2">
+            <a
+              href={`https://www.opensanctions.org/search/?q=${encodeURIComponent(displayName)}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs border border-gray-300 rounded hover:bg-gray-50 transition-colors"
+            >
+              <span>🔍</span>
+              OpenSanctions
+            </a>
+            <a
+              href={`https://offshoreleaks.icij.org/search?q=${encodeURIComponent(displayName)}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs border border-gray-300 rounded hover:bg-gray-50 transition-colors"
+            >
+              <span>🌐</span>
+              ICIJ Offshore Leaks
+            </a>
+            <a
+              href={`https://efts.sec.gov/LATEST/search-index?q=${encodeURIComponent(displayName)}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs border border-gray-300 rounded hover:bg-gray-50 transition-colors"
+            >
+              <span>📄</span>
+              SEC EDGAR
+            </a>
+            <a
+              href={`https://sanctionssearch.ofac.treas.gov/`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs border border-gray-300 rounded hover:bg-gray-50 transition-colors"
+              title={`Search for "${displayName}" on the OFAC SDN List`}
+            >
+              <span>🏛️</span>
+              OFAC SDN List
+            </a>
+            {isWallet && walletAddress && (
+              <a
+                href={`https://www.chainalysis.com/free-cryptocurrency-sanctions-screening-tools/`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs border border-gray-300 rounded hover:bg-gray-50 transition-colors"
+              >
+                <span>⛓️</span>
+                Chainalysis Screening
+              </a>
+            )}
           </div>
         </div>
 
