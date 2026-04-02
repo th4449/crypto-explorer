@@ -55,6 +55,31 @@ export default function AdminLayout({
               </Link>
             );
           })}
+
+          <div className="my-2 border-t border-gray-200" />
+
+          <Link
+            href="/admin/import"
+            className={`flex items-center gap-2 px-3 py-2 rounded text-sm ${
+              pathname === "/admin/import"
+                ? "bg-blue-50 text-blue-700 font-medium"
+                : "text-gray-700 hover:bg-gray-50"
+            }`}
+          >
+            <span>📥</span>
+            CSV Import
+          </Link>
+          <Link
+            href="/admin/audit"
+            className={`flex items-center gap-2 px-3 py-2 rounded text-sm ${
+              pathname === "/admin/audit"
+                ? "bg-blue-50 text-blue-700 font-medium"
+                : "text-gray-700 hover:bg-gray-50"
+            }`}
+          >
+            <span>📋</span>
+            Audit Log
+          </Link>
         </nav>
 
         <div className="p-4 border-t border-gray-200 space-y-3">

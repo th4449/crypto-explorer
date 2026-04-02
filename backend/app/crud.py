@@ -14,9 +14,10 @@ import asyncpg
 
 from app.database import get_pool
 from app.services.graph import upsert_vertex, remove_vertex, ENTITY_TABLES
+from app.services.audit import log_action
 
 
-async def create_entity(table: str, columns: list[str], data: dict) -> dict:
+async def create_entity(table: str, columns: list[str], data: dict, user_email: str | None = None) -> dict:
     """Insert a new row and return it."""
     pool = await get_pool()
 
@@ -58,6 +59,10 @@ async def create_entity(table: str, columns: list[str], data: dict) -> dict:
                 entity_type=meta["type"],
                 verification_tier=result["verification_tier"],
             )
+
+    # Audit log
+    await log_action(user_email, "create", table, result["id"], {"created": {c: str(data.get(c, "")) for c in cols}})
+
 
     return result
 
@@ -138,7 +143,7 @@ async def list_entities(
     }
 
 
-async def update_entity(table: str, columns: list[str], entity_id: UUID, data: dict) -> dict | None:
+async def update_entity(table: str, columns: list[str], entity_id: UUID, data: dict, user_email: str | None = None) -> dict | None:
     """Update non-None fields on an existing entity."""
     pool = await get_pool()
 
@@ -183,10 +188,13 @@ async def update_entity(table: str, columns: list[str], entity_id: UUID, data: d
                 verification_tier=result["verification_tier"],
             )
 
+    # Audit log
+    await log_action(user_email, "update", table, entity_id, {"updated_fields": update_cols})
+
     return result
 
 
-async def soft_delete_entity(table: str, entity_id: UUID) -> bool:
+async def soft_delete_entity(table: str, entity_id: UUID, user_email: str | None = None) -> bool:
     """Set deleted_at timestamp and remove the vertex from the graph."""
     pool = await get_pool()
     query = f"""
@@ -199,4 +207,8 @@ async def soft_delete_entity(table: str, entity_id: UUID) -> bool:
         row = await conn.fetchrow(query, entity_id)
         if row:
             await remove_vertex(conn, str(entity_id))
+
+    if row:
+        await log_action(user_email, "delete", table, entity_id)
+
     return row is not None
