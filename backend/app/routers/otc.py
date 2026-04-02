@@ -11,6 +11,7 @@ import json
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
+import bleach
 from fastapi import APIRouter, HTTPException, Query, Request
 
 from app.database import get_pool
@@ -155,6 +156,14 @@ async def submit_review(exchange_id: UUID, body: ReviewSubmit, request: Request)
             ip_hash,
         )
 
+        # Sanitize review text — strip all HTML tags and attributes
+        clean_text = bleach.clean(body.review_text, tags=[], attributes={}, strip=True).strip()
+        if len(clean_text) < 10:
+            raise HTTPException(
+                status_code=400,
+                detail="Review text must be at least 10 characters after removing any HTML.",
+            )
+
         # Create the review
         row = await conn.fetchrow(
             """
@@ -164,7 +173,7 @@ async def submit_review(exchange_id: UUID, body: ReviewSubmit, request: Request)
             """,
             exchange_id,
             body.rating,
-            body.review_text,
+            clean_text,
             ip_hash,
         )
 

@@ -4,10 +4,21 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-DATABASE_URL = os.getenv(
-    "DATABASE_URL",
-    "postgresql://app_user:localdevpassword@localhost:5432/crypto_explorer",
+# In production, DATABASE_URL must be explicitly set.
+# The fallback is only for local development.
+_env = os.getenv("ENVIRONMENT", "development")
+_default_url = (
+    "postgresql://app_user:localdevpassword@localhost:5432/crypto_explorer"
+    if _env != "production"
+    else None
 )
+DATABASE_URL = os.getenv("DATABASE_URL", _default_url)
+
+if not DATABASE_URL:
+    raise RuntimeError(
+        "DATABASE_URL environment variable is required in production. "
+        "Set ENVIRONMENT=development to use the local default."
+    )
 
 pool: asyncpg.Pool | None = None
 

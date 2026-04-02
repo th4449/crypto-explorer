@@ -15,10 +15,20 @@ import asyncpg
 
 
 def _escape(value: str) -> str:
-    """Escape single quotes for safe interpolation into a Cypher string."""
+    """
+    Escape a value for safe interpolation into a Cypher string literal.
+    Handles single quotes, backslashes, null bytes, and control characters.
+    Truncates to 1000 chars to prevent oversized queries.
+    """
     if value is None:
         return ""
-    return str(value).replace("\\", "\\\\").replace("'", "\\'")
+    s = str(value)
+    # Remove null bytes and control characters
+    s = "".join(ch for ch in s if ord(ch) >= 32 or ch in ("\n", "\t"))
+    # Escape backslashes first, then single quotes
+    s = s.replace("\\", "\\\\").replace("'", "\\'")
+    # Truncate to prevent oversized Cypher literals
+    return s[:1000]
 
 
 async def _exec_cypher(conn: asyncpg.Connection, cypher: str) -> None:
