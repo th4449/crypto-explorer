@@ -14,7 +14,7 @@ import asyncpg
 
 from app.database import get_pool
 from app.services.graph import upsert_vertex, remove_vertex, ENTITY_TABLES
-from app.services.audit import log_action
+from app.services.audit import log_action, build_diff
 
 
 async def create_entity(table: str, columns: list[str], data: dict, user_email: str | None = None) -> dict:
@@ -61,7 +61,7 @@ async def create_entity(table: str, columns: list[str], data: dict, user_email: 
             )
 
     # Audit log
-    await log_action(user_email, "create", table, result["id"], {"created": {c: str(data.get(c, "")) for c in cols}})
+    await log_action(user_email, "create", table, result["id"], build_diff(None, result))
 
 
     return result
@@ -147,6 +147,11 @@ async def update_entity(table: str, columns: list[str], entity_id: UUID, data: d
     """Update non-None fields on an existing entity."""
     pool = await get_pool()
 
+    # Fetch the entity before the update for the audit diff
+    before = await get_entity(table, entity_id)
+    if not before:
+        return None
+
     if "sources" in data and data["sources"] is not None:
         data["sources"] = json.dumps(
             [s.model_dump() if hasattr(s, "model_dump") else s for s in data["sources"]]
@@ -155,7 +160,7 @@ async def update_entity(table: str, columns: list[str], entity_id: UUID, data: d
     # Only update fields that were explicitly provided (not None)
     update_cols = [c for c in columns if c in data and data[c] is not None]
     if not update_cols:
-        return await get_entity(table, entity_id)
+        return before
 
     set_clauses = [f"{col} = ${i+1}" for i, col in enumerate(update_cols)]
     values = [data[col] for col in update_cols]
@@ -188,8 +193,8 @@ async def update_entity(table: str, columns: list[str], entity_id: UUID, data: d
                 verification_tier=result["verification_tier"],
             )
 
-    # Audit log
-    await log_action(user_email, "update", table, entity_id, {"updated_fields": update_cols})
+    # Audit log with before/after diff
+    await log_action(user_email, "update", table, entity_id, build_diff(before, result, update_cols))
 
     return result
 
@@ -197,6 +202,10 @@ async def update_entity(table: str, columns: list[str], entity_id: UUID, data: d
 async def soft_delete_entity(table: str, entity_id: UUID, user_email: str | None = None) -> bool:
     """Set deleted_at timestamp and remove the vertex from the graph."""
     pool = await get_pool()
+
+    # Fetch entity before deletion for audit record
+    before = await get_entity(table, entity_id)
+
     query = f"""
         UPDATE {table}
         SET deleted_at = NOW()
@@ -209,6 +218,6 @@ async def soft_delete_entity(table: str, entity_id: UUID, user_email: str | None
             await remove_vertex(conn, str(entity_id))
 
     if row:
-        await log_action(user_email, "delete", table, entity_id)
+        await log_action(user_email, "delete", table, entity_id, build_diff(before, None))
 
     return row is not None
