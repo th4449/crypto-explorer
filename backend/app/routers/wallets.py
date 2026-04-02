@@ -4,6 +4,7 @@ from uuid import UUID
 from fastapi import APIRouter, HTTPException, Query
 
 from app.crud import create_entity, get_entity, list_entities, update_entity, soft_delete_entity
+from app.database import get_pool
 from app.models.wallets import WalletCreate, WalletUpdate, WalletResponse
 from app.models.base import VerificationTier
 
@@ -69,3 +70,41 @@ async def delete_wallet(entity_id: UUID):
     deleted = await soft_delete_entity(TABLE, entity_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="Wallet not found")
+
+
+@router.get("/{entity_id}/enrichment")
+async def get_wallet_enrichment(entity_id: UUID):
+    """
+    Fetch blockchain activity for a wallet. Returns cached data if
+    fresh (within 24 hours), otherwise fetches live from Blockscout/Etherscan.
+    """
+    from app.services.blockchain import enrich_wallet
+
+    row = await get_entity(TABLE, entity_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Wallet not found")
+
+    data = await enrich_wallet(
+        wallet_id=entity_id,
+        address=row["address"],
+        blockchain=row.get("blockchain", "ethereum"),
+    )
+    return data
+
+
+@router.post("/refresh-verified")
+async def refresh_verified():
+    """Admin endpoint: refresh blockchain data for all verified wallets."""
+    from app.services.blockchain import refresh_verified_wallets
+    result = await refresh_verified_wallets()
+    return result
+
+
+@router.delete("/{entity_id}/enrichment-cache", status_code=204)
+async def expire_cache(entity_id: UUID):
+    """Admin endpoint: manually expire the cache for a wallet."""
+    pool = await get_pool()
+    await pool.execute(
+        "DELETE FROM wallet_enrichment WHERE wallet_id = $1", entity_id
+    )
+

@@ -169,6 +169,8 @@ export default function EntityDetailPage() {
 
   const [entity, setEntity] = useState<Record<string, any> | null>(null);
   const [relationships, setRelationships] = useState<RelationshipsResponse | null>(null);
+  const [enrichment, setEnrichment] = useState<Record<string, any> | null>(null);
+  const [enrichmentLoading, setEnrichmentLoading] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
 
@@ -209,6 +211,17 @@ export default function EntityDetailPage() {
     fetchData();
     return () => { cancelled = true; };
   }, [config, entityId, slug]);
+
+  /* Fetch blockchain enrichment for wallet entities */
+  useEffect(() => {
+    if (slug !== "wallets" || !entity) return;
+
+    setEnrichmentLoading(true);
+    apiFetch<Record<string, any>>(`/api/v1/wallets/${entityId}/enrichment`)
+      .then(setEnrichment)
+      .catch(() => setEnrichment(null))
+      .finally(() => setEnrichmentLoading(false));
+  }, [slug, entityId, entity]);
 
   /* Loading / error states */
   if (loading) {
@@ -323,6 +336,150 @@ export default function EntityDetailPage() {
                 Blockscout ↗
               </a>
             </div>
+          </div>
+        )}
+
+        {/* Blockchain Activity (wallets only) */}
+        {isWallet && (
+          <div className="bg-white border border-gray-200 rounded p-5">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-sm font-medium text-gray-700">
+                Blockchain Activity
+              </h2>
+              {enrichment?._cached && (
+                <span className="text-xs text-gray-400">
+                  Cached · Fetched{" "}
+                  {new Date(enrichment._fetched_at).toLocaleString()}
+                </span>
+              )}
+            </div>
+
+            {enrichmentLoading ? (
+              <p className="text-sm text-gray-400 py-4 text-center">
+                Fetching blockchain data...
+              </p>
+            ) : enrichment?.error ? (
+              <p className="text-sm text-gray-500 py-4 text-center">
+                {enrichment.error}
+              </p>
+            ) : enrichment ? (
+              <div>
+                {/* Summary stats */}
+                <div className="grid grid-cols-3 gap-3 mb-4">
+                  <div className="bg-gray-50 rounded p-3 text-center">
+                    <div className="text-lg font-semibold text-gray-900">
+                      {enrichment.balance || "0"}
+                    </div>
+                    <div className="text-xs text-gray-500">Balance (ETH)</div>
+                  </div>
+                  <div className="bg-gray-50 rounded p-3 text-center">
+                    <div className="text-lg font-semibold text-gray-900">
+                      {enrichment.tx_count?.toLocaleString() || "0"}
+                    </div>
+                    <div className="text-xs text-gray-500">Transactions</div>
+                  </div>
+                  <div className="bg-gray-50 rounded p-3 text-center">
+                    <div className="text-lg font-semibold text-gray-900">
+                      {enrichment.source || "—"}
+                    </div>
+                    <div className="text-xs text-gray-500">Data Source</div>
+                  </div>
+                </div>
+
+                {enrichment.is_contract && (
+                  <div className="text-xs bg-purple-50 text-purple-700 px-2 py-1 rounded inline-block mb-3">
+                    Smart Contract
+                  </div>
+                )}
+
+                {/* Transaction table */}
+                {enrichment.transactions && enrichment.transactions.length > 0 ? (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs">
+                      <thead className="bg-gray-50 border-b border-gray-200">
+                        <tr>
+                          <th className="text-left px-3 py-2 text-gray-500 font-medium">Date</th>
+                          <th className="text-left px-3 py-2 text-gray-500 font-medium">Dir</th>
+                          <th className="text-left px-3 py-2 text-gray-500 font-medium">Counterparty</th>
+                          <th className="text-right px-3 py-2 text-gray-500 font-medium">Amount</th>
+                          <th className="text-left px-3 py-2 text-gray-500 font-medium">Tx Hash</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {enrichment.transactions.map((tx: any, idx: number) => {
+                          const txExplorerUrl = explorer
+                            ? explorer.url(tx.hash).replace("/address/", "/tx/")
+                            : `https://etherscan.io/tx/${tx.hash}`;
+                          const counterpartyUrl = explorer
+                            ? explorer.url(tx.counterparty)
+                            : `https://etherscan.io/address/${tx.counterparty}`;
+
+                          return (
+                            <tr key={idx} className="border-b border-gray-100">
+                              <td className="px-3 py-2 text-gray-600 whitespace-nowrap">
+                                {tx.timestamp
+                                  ? new Date(tx.timestamp).toLocaleDateString("en-US", {
+                                      month: "short",
+                                      day: "numeric",
+                                      year: "2-digit",
+                                    })
+                                  : "—"}
+                              </td>
+                              <td className="px-3 py-2">
+                                <span
+                                  className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                                    tx.direction === "in"
+                                      ? "bg-green-100 text-green-700"
+                                      : "bg-orange-100 text-orange-700"
+                                  }`}
+                                >
+                                  {tx.direction === "in" ? "IN" : "OUT"}
+                                </span>
+                              </td>
+                              <td className="px-3 py-2 font-mono text-gray-700">
+                                <a
+                                  href={counterpartyUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-blue-600 hover:text-blue-800"
+                                  title={tx.counterparty}
+                                >
+                                  {tx.counterparty
+                                    ? `${tx.counterparty.slice(0, 8)}...${tx.counterparty.slice(-6)}`
+                                    : "—"}
+                                </a>
+                              </td>
+                              <td className="px-3 py-2 text-right text-gray-900 whitespace-nowrap">
+                                {parseFloat(tx.amount) > 0 ? tx.amount : "0"}
+                              </td>
+                              <td className="px-3 py-2 font-mono">
+                                <a
+                                  href={txExplorerUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-blue-600 hover:text-blue-800"
+                                  title={tx.hash}
+                                >
+                                  {tx.hash ? `${tx.hash.slice(0, 10)}...` : "—"}
+                                </a>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-400 text-center py-2">
+                    No recent transactions found.
+                  </p>
+                )}
+              </div>
+            ) : (
+              <p className="text-sm text-gray-400 py-4 text-center">
+                Blockchain data unavailable.
+              </p>
+            )}
           </div>
         )}
 
