@@ -1,0 +1,8 @@
+[build]
+# Railway auto-detects the Dockerfile
+
+[deploy]
+healthcheckPath = "/"
+healthcheckTimeout = 5
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 3

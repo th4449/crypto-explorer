@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.database import get_pool, close_pool
 from app.auth import AuthMiddleware
 from app.rate_limit import RateLimitMiddleware
+from app.security import SecurityHeadersMiddleware
 from app.routers import (
     companies, people, wallets, banks, violations,
     graph, relationships, imports, audit, otc, sanctions,
@@ -121,6 +122,7 @@ app.include_router(api_keys.router)
 # 2. AuthMiddleware — validates session tokens on write operations
 app.add_middleware(AuthMiddleware)
 app.add_middleware(RateLimitMiddleware)
+app.add_middleware(SecurityHeadersMiddleware)
 
 
 @app.get("/health", tags=["System"])

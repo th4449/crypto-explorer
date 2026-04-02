@@ -1,0 +1,15 @@
+# Railway deployment configuration
+# Each service is deployed from its subdirectory.
+# Create three services in the Railway dashboard:
+#   1. PostgreSQL (use Railway's managed Postgres plugin)
+#   2. Backend (point to /backend, Dockerfile build)
+#   3. Frontend (point to /frontend, Dockerfile build)
+
+[build]
+# Railway auto-detects Dockerfiles
+
+[deploy]
+healthcheckPath = "/health"
+healthcheckTimeout = 5
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 3
