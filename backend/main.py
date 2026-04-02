@@ -16,6 +16,17 @@ from app.routers import (
 
 load_dotenv()
 
+# Initialize Sentry error tracking (free tier: 5K events/month)
+# Set SENTRY_DSN in environment to enable. Safe to leave unset in dev.
+_sentry_dsn = os.getenv("SENTRY_DSN", "")
+if _sentry_dsn:
+    import sentry_sdk
+    sentry_sdk.init(
+        dsn=_sentry_dsn,
+        traces_sample_rate=0.1,
+        environment=os.getenv("ENVIRONMENT", "development"),
+    )
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -129,3 +140,80 @@ app.add_middleware(SecurityHeadersMiddleware)
 async def health_check():
     """Health check endpoint. Returns API status and version."""
     return {"status": "ok", "version": "1.0.0"}
+
+
+@app.get("/api/v1/status", tags=["System"])
+async def system_status():
+    """
+    Detailed system status. Returns database connection health,
+    entity counts by type, and last backup timestamp.
+    """
+    pool = await get_pool()
+
+    # Database connection test
+    db_ok = False
+    try:
+        await pool.fetchval("SELECT 1")
+        db_ok = True
+    except Exception:
+        pass
+
+    # Entity counts
+    counts = {}
+    for table in ("companies", "people", "wallets", "banks", "violations"):
+        try:
+            count = await pool.fetchval(
+                f"SELECT COUNT(*) FROM {table} WHERE deleted_at IS NULL"
+            )
+            counts[table] = count
+        except Exception:
+            counts[table] = -1
+
+    # Relationship count
+    try:
+        counts["relationships"] = await pool.fetchval(
+            "SELECT COUNT(*) FROM relationships"
+        )
+    except Exception:
+        counts["relationships"] = -1
+
+    # Last backup timestamp (read from marker file)
+    last_backup = None
+    for path in ("/tmp/backups/.last_backup", "/app/backups/.last_backup"):
+        try:
+            with open(path, "r") as f:
+                last_backup = f.read().strip()
+                break
+        except FileNotFoundError:
+            continue
+
+    # Graph vertex count
+    graph_vertices = 0
+    try:
+        await pool.execute(
+            "SET search_path = ag_catalog, '$user', public"
+        )
+        row = await pool.fetchrow(
+            "SELECT * FROM cypher('crypto_graph', $$ "
+            "MATCH (n:Entity) RETURN count(n) "
+            "$$) as (count agtype)"
+        )
+        graph_vertices = int(row["count"]) if row else 0
+    except Exception:
+        pass
+
+    return {
+        "status": "ok" if db_ok else "degraded",
+        "version": "1.0.0",
+        "database": "connected" if db_ok else "disconnected",
+        "entities": counts,
+        "graph_vertices": graph_vertices,
+        "total_entities": sum(v for v in counts.values() if v > 0 and v != counts.get("relationships")),
+        "last_backup": last_backup,
+    }
+
+
+@app.get("/debug-sentry", tags=["System"], include_in_schema=False)
+async def debug_sentry():
+    """Trigger a test error to verify Sentry is working. Not shown in docs."""
+    raise RuntimeError("Sentry test error — this is intentional.")
